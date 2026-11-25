@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ELO RANKER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg-main: #000000;
+    --bg-sidebar: #0a0a0a;
+    --border-color: #333333;
+    --border-hover: #9d4edd;
+    --text-primary: #f0f0f0;
+    --text-secondary: #888888;
+    --accent-primary: #9d4edd;
+    --color-highlight: #fbbf24;
+    --metric-1: #22c55e;
+    --metric-2: #ef4444;
+    --metric-4: #06b6d4;
+    --metric-7: #3b82f6;
+    --metric-9: #94a3b8;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    font-family: 'Fira Code', 'Courier New', monospace !important;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    font-variant-numeric: tabular-nums;
+}
+
+.sidebar {
+    width: 380px;
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    flex-shrink: 0;
+}
+
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    background: var(--bg-main);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-main); border-left: 1px solid var(--border-color); }
+::-webkit-scrollbar-thumb { background: var(--border-color); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+.sidebar-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    gap: 8px;
+}
+.sidebar-item:hover { border-color: var(--border-hover); background-color: rgba(255, 255, 255, 0.02); }
+.sidebar-item.active { border-color: var(--accent-primary); background-color: rgba(157, 78, 221, 0.06); }
+
+.item-badge {
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+}
+
+.list-done { color: var(--metric-1); margin-left: 6px; }
+
+.hero-banner {
+    padding: 32px 48px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.hero-title {
+    font-size: 2.2rem;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 700;
+}
+.badge-pill {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.tabs-bar {
+    padding: 0 48px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: 24px;
+}
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    padding: 14px 4px;
+    cursor: pointer;
+    position: relative;
+    outline: none;
+    text-transform: uppercase;
+    transition: color 0.2s ease;
+}
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active { color: var(--accent-primary); }
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: var(--accent-primary);
+}
+
+.table-card {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    margin-bottom: 24px;
+    overflow-x: auto;
+}
+.data-table { width: 100%; border-collapse: collapse; text-align: left; }
+.data-table th {
+    background-color: var(--bg-sidebar);
+    padding: 14px 18px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    user-select: none;
+}
+.data-table td {
+    padding: 12px 18px;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+.data-table tr:hover td { background-color: rgba(255, 255, 255, 0.05); }
+
+.btn-wireframe {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+.btn-wireframe:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+
+.input-wireframe {
+    width: 100%;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    padding: 10px 12px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+.input-wireframe:focus { border-color: var(--accent-primary); }
+
+button:focus-visible, .sidebar-item:focus-visible, .item-title:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+
+/* page-specific */
+.sidebar-head { padding: 24px 24px 0; }
+.hub-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    margin-bottom: 16px;
+}
+.hub-btn:hover {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+.sidebar-new { padding: 0 24px 16px; display: flex; flex-direction: column; }
+.list-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+.hero-left { flex: 1; min-width: 0; margin-right: 24px; }
+input.hero-title { width: 100%; min-width: 0; background: transparent; border: none; border-bottom: 1px solid transparent; outline: none; display: block; }
+input.hero-title:focus { border-bottom-color: var(--accent-primary); }
+#empty-lists { padding: 24px 48px; color: var(--text-secondary); }
+#view-items, #view-match, #view-results { padding: 24px 48px; }
+.items-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.actions { display: flex; gap: 8px; }
+.thumb { width: 48px; height: 36px; object-fit: cover; display: block; }
+.add-row { display: flex; gap: 8px; }
+.add-row .input-wireframe { flex: 1; min-width: 0; }
+#match { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; padding: 24px 48px; }
+[hidden] { display: none !important; }
+.side { border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.side.playing { border-color: var(--accent-primary); }
+.player-box { aspect-ratio: 16/9; width: 100%; position: relative; }
+.player-cover { position: absolute; inset: 0; cursor: pointer; }
+/* once a side is playing the cover gets out of the way so the YouTube controls are usable */
+.side.playing .player-cover { pointer-events: none; }
+.player-box iframe { width: 100%; height: 100%; display: block; }
+.side-title { font-size: 0.9rem; min-height: 1.2em; }
+.results-table { margin-top: 24px; }
+.form-error { color: var(--metric-2); font-size: 0.75rem; }
+.item-title { width: 100%; min-width: 0; background: transparent; border: none; outline: none; color: var(--text-primary); font-size: 0.8rem; }
+.item-title:focus { border-bottom: 1px solid var(--accent-primary); }
+.sidebar-foot { padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; flex-wrap: wrap; }
+#empty-msg { padding: 24px 48px; color: var(--text-secondary); }
+.tier-row { display: flex; border: 1px solid var(--border-color); margin-bottom: 8px; }
+.tier-label { width: 64px; height: 64px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; color: #000; }
+.tier-strip { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
+.tier-strip img { width: 120px; height: 68px; object-fit: cover; display: block; }
+.side-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+@media (max-width: 760px) {
+    body { height: auto; overflow: visible; display: block; }
+    .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border-color); }
+    .main-content { height: auto; overflow: visible; }
+    .sidebar-head { padding: 16px 16px 0; }
+    .sidebar-list { flex-grow: 0; max-height: 220px; padding: 0 16px 16px; }
+    .sidebar-new { padding: 0 16px 16px; }
+    .sidebar-foot { padding: 16px; }
+    .hub-btn, .sidebar-item, .btn-wireframe, .input-wireframe { min-height: 44px; }
+    .btn-wireframe { font-size: 0.95rem; }
+    .input-wireframe { font-size: 1rem; }
+    .item-title { font-size: 1rem; min-height: 40px; min-width: 180px; }
+    .hero-banner { padding: 16px; }
+    .hero-left { margin-right: 12px; }
+    .hero-title { font-size: 1.15rem; letter-spacing: 1px; }
+    .tabs-bar { padding: 0 16px; gap: 16px; }
+    .tab-btn { padding: 14px 4px; min-height: 48px; }
+    #empty-lists, #empty-msg { padding: 16px; }
+    #view-items, #view-match, #view-results { padding: 16px; }
+    .add-row { flex-direction: column; }
+    .actions { flex-wrap: wrap; }
+    .data-table { min-width: 480px; }
+    #match { grid-template-columns: 1fr; gap: 16px; padding: 16px 0; }
+    .pick-btn { min-height: 56px; font-size: 1.05rem; }
+    .tier-label { width: 48px; height: 48px; font-size: 1.3rem; }
+    .tier-strip img { width: 96px; height: 54px; }
+}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+    <div class="sidebar-head"><a href="../" class="hub-btn"><span class="hub-btn-text">Return to Hub</span></a></div>
+    <div id="lists" class="sidebar-list"></div>
+    <div class="sidebar-new"><button id="new-list-btn" class="btn-wireframe">+ NEW LIST</button></div>
+    <div class="sidebar-foot">
+        <button id="import-btn" class="btn-wireframe">IMPORT</button>
+        <input id="import-file" type="file" accept="application/json" hidden>
+    </div>
+</aside>
+<main class="main-content">
+    <div class="hero-banner">
+        <div class="hero-left">
+            <h1 id="hero-title" class="hero-title">ELO RANKER</h1>
+            <input id="list-name" class="hero-title" aria-label="list name" hidden>
+            <div id="save-error" class="form-error" hidden>COULD NOT SAVE — STORAGE FULL OR BLOCKED</div>
+        </div>
+        <span id="progress" class="badge-pill">0 / 0</span>
+    </div>
+    <div class="tabs-bar">
+        <button class="tab-btn" data-tab="items">ITEMS</button>
+        <button class="tab-btn active" data-tab="match">MATCH</button>
+        <button class="tab-btn" data-tab="results">RESULTS</button>
+    </div>
+    <p id="empty-lists" hidden>NO LISTS YET — CREATE ONE WITH + NEW LIST</p>
+    <section id="view-items" hidden>
+        <div class="items-bar">
+            <div class="add-row">
+                <input id="url-input" class="input-wireframe" placeholder="youtube link, playlist link or image link">
+                <input id="name-input" class="input-wireframe" placeholder="name (required for images)" aria-label="item name">
+                <button id="add-btn" class="btn-wireframe">ADD</button>
+            </div>
+            <div id="url-error" class="form-error" hidden></div>
+            <div id="add-status" hidden></div>
+        </div>
+        <div id="item-rows"></div>
+        <div class="actions">
+            <button id="export-btn" class="btn-wireframe">EXPORT</button>
+            <button id="reset-btn" class="btn-wireframe">RESET VOTES</button>
+            <button id="delete-btn" class="btn-wireframe">DELETE LIST</button>
+        </div>
+    </section>
+    <section id="view-match">
+        <p id="empty-msg" hidden>ADD AT LEAST 2 ITEMS</p>
+        <button id="start-btn" class="btn-wireframe">START</button>
+        <div id="match" hidden>
+            <div class="side">
+                <div class="player-box"><div id="player-0"></div><img class="side-img" alt="" hidden><div class="player-cover"></div></div>
+                <div class="side-title"></div>
+                <button class="btn-wireframe pick-btn">PICK</button>
+            </div>
+            <div class="side">
+                <div class="player-box"><div id="player-1"></div><img class="side-img" alt="" hidden><div class="player-cover"></div></div>
+                <div class="side-title"></div>
+                <button class="btn-wireframe pick-btn">PICK</button>
+            </div>
+        </div>
+    </section>
+    <section id="view-results" hidden></section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
