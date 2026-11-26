@@ -13,6 +13,10 @@ let tab = 'match';
 let started = false;
 let current = [null, null];
 let lastPair = null;
+let mode = null;
+// Page state only, never saved.
+let focusId = null;
+let focusLeft = 0;
 const players = [];
 const ready = [false, false];
 const pauseAll = () => players.forEach((p, i) => ready[i] && p.pauseVideo());
@@ -87,6 +91,13 @@ function tableCard(heads, rows, cls = 'table-card') {
   return card;
 }
 
+function focusBtn(it) {
+  const b = el('button', 'btn-wireframe', { textContent: 'FOCUS' });
+  b.setAttribute('aria-label', `focus ${it.title}`);
+  b.addEventListener('click', () => startFocus(it.id));
+  return b;
+}
+
 function renderItems() {
   const r = computeRatings(items(), cur().matches);
   const rows = items().map((it) => {
@@ -101,6 +112,7 @@ function renderItems() {
     const cells = [el('td'), el('td'), rate, el('td', '', { textContent: String(r.get(it.id).games) }), el('td')];
     cells[0].append(itemImg(it, false, 'thumb', { alt: '', loading: 'lazy' }));
     cells[1].append(title);
+    if (!it.blocked) cells[4].append(focusBtn(it), ' ');
     cells[4].append(x);
     const row = el('tr');
     row.append(...cells);
@@ -113,7 +125,7 @@ function renderProgress() {
   const n = validCount(), eli = eligible().length, target = targetMatches(eli);
   const done = isDone(cur());
   const p = $('#progress');
-  p.textContent = `${n} / ${target}` + (done ? ' — DONE, KEEP GOING OR SEE RESULTS' : '');
+  p.textContent = `${n} / ${target}` + (done ? '. DONE, KEEP GOING OR SEE RESULTS' : '');
   p.style.color = p.style.borderColor = done ? 'var(--metric-1)' : '';
 }
 
@@ -127,6 +139,24 @@ function renderMatchState() {
   const needStart = !started && eligible().some((i) => i.videoId);
   $('#start-btn').hidden = !ok || !needStart;
   $('#match').hidden = !ok || needStart;
+}
+
+function renderStatus() {
+  const box = $('#match-status');
+  box.replaceChildren();
+  box.hidden = $('#match').hidden || !current[0] || !['focus', 'placing', 'neighbor'].includes(mode);
+  if (box.hidden) return;
+  if (mode === 'neighbor') { box.textContent = 'NEIGHBOR CHECK'; return; }
+  if (mode === 'placing') {
+    const r = computeRatings(items(), cur().matches);
+    const id = r.get(current[0]).games <= r.get(current[1]).games ? current[0] : current[1];
+    box.textContent = `PLACING: ${byId(id).title}`;
+    return;
+  }
+  const stop = el('button', 'btn-wireframe', { textContent: 'STOP' });
+  stop.setAttribute('aria-label', 'stop focus');
+  stop.addEventListener('click', stopFocus);
+  box.append(`FOCUS: ${byId(focusId)?.title ?? ''} (${5 - focusLeft}/5) `, stop);
 }
 
 function renderResults() {
@@ -155,10 +185,12 @@ function renderResults() {
     const row = el('tr');
     const cells = [n + 1, i.title, tier.get(i.id), Math.round(r.get(i.id).rating), r.get(i.id).games].map((v) => el('td', '', { textContent: String(v) }));
     cells[2].style.color = TIER_COLOR[tier.get(i.id)];
-    row.append(...cells);
+    const last = el('td');
+    last.append(focusBtn(i));
+    row.append(...cells, last);
     return row;
   });
-  view.replaceChildren(list, tableCard(['#', 'TITLE', 'TIER', 'ELO', 'GAMES'], rows, 'table-card results-table'));
+  view.replaceChildren(list, tableCard(['#', 'TITLE', 'TIER', 'ELO', 'GAMES', ''], rows, 'table-card results-table'));
 }
 
 function renderAll() {
@@ -172,7 +204,7 @@ function renderAll() {
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   for (const t of ['items', 'match', 'results']) $(`#view-${t}`).hidden = none || tab !== t;
   if (none) return;
-  renderProgress(); renderMatchState(); updateSideTitles();
+  renderProgress(); renderMatchState(); renderStatus(); updateSideTitles();
   if (tab === 'items') renderItems();
   if (tab === 'results') renderResults();
 }
@@ -180,6 +212,7 @@ function renderAll() {
 // Every state mutation goes through here.
 function changed(forceNewPair) {
   save();
+  if (focusId && (!byId(focusId) || byId(focusId).blocked)) { focusId = null; focusLeft = 0; }
   const pairOk = current[0] && current.every((id) => byId(id) && !byId(id).blocked);
   if (forceNewPair || !pairOk) loadPair();
   renderAll();
@@ -187,7 +220,8 @@ function changed(forceNewPair) {
 
 // Open a list (null only when there are none). Players are shared across lists, so stop and clear them first.
 function openList(id, firstTab) {
-  current = [null, null]; lastPair = null;
+  current = [null, null]; lastPair = null; mode = null;
+  focusId = null; focusLeft = 0;
   pauseAll();
   sides.forEach((s) => s.classList.remove('playing'));
   store.open = id;
@@ -202,12 +236,14 @@ function openList(id, firstTab) {
 function loadPair() {
   sides.forEach((s) => s.classList.remove('playing'));
   const its = eligible();
-  if (its.length < 2) {
-    current = [null, null]; lastPair = null;
+  const res = its.length < 2 ? null : nextPair(its, computeRatings(items(), cur().matches), cur().matches, { lastPair, focusId });
+  if (!res) {
+    current = [null, null]; lastPair = null; mode = null;
     pauseAll();
     return;
   }
-  current = lastPair = nextPair(its, computeRatings(items(), cur().matches), lastPair);
+  current = lastPair = res.pair;
+  mode = res.mode;
   sides.forEach((s, i) => {
     const it = byId(current[i]), img = s.querySelector('.side-img');
     if (it.videoId) {
@@ -229,7 +265,22 @@ function activate(i) {
 function pick(i) {
   if (!current[0] || $('#match').hidden) return;
   cur().matches.push({ winner: current[i], loser: current[1 - i], t: Date.now() });
+  if (focusId && current.includes(focusId) && --focusLeft <= 0) { focusId = null; focusLeft = 0; }
   changed(true);
+}
+
+function startFocus(id) {
+  if (eligible().length < 2) return;
+  focusId = id; focusLeft = 5;
+  tab = 'match';
+  loadPair();
+  renderAll();
+}
+
+function stopFocus() {
+  focusId = null; focusLeft = 0;
+  loadPair();
+  renderAll();
 }
 
 function syncTitle(i) {
@@ -379,7 +430,7 @@ async function importPlaylist(listId) {
   if (cur() === list) changed(); else save();
   const dupes = ids.length - added.length;
   // shortcut: the embedded player returns at most 200 videos per playlist, use the YouTube Data API (needs a key) for longer ones
-  setStatus(`ADDED ${added.length} VIDEOS` + (dupes ? `, ${dupes} ALREADY IN LIST` : '') + (ids.length === 200 ? ' — PLAYLISTS ARE CUT AT 200' : ''));
+  setStatus(`ADDED ${added.length} VIDEOS` + (dupes ? `, ${dupes} ALREADY IN LIST` : '') + (ids.length === 200 ? '. PLAYLISTS ARE CUT AT 200' : ''));
   $('#url-input').value = '';
   btn.disabled = importing = false;
   const refresh = () => { if (cur() === list && tab === 'items') { renderItems(); updateSideTitles(); } };
@@ -433,6 +484,7 @@ $('#import-file').addEventListener('change', async (e) => {
 $('#reset-btn').addEventListener('click', () => {
   if (!confirm('Reset all votes?')) return;
   cur().matches = [];
+  focusId = null; focusLeft = 0;
   changed(true);
 });
 
@@ -444,3 +496,18 @@ $('#delete-btn').addEventListener('click', () => {
 });
 
 openList(cur() ? store.open : store.lists[0]?.id ?? null);
+
+// ---------- sidebar toggle ----------
+const sbBtn = $('#sidebar-toggle');
+function syncSidebar() {
+    const c = document.body.classList.contains('sidebar-collapsed');
+    sbBtn.textContent = c ? '>' : '<';
+    sbBtn.setAttribute('aria-expanded', String(!c));
+    sbBtn.setAttribute('aria-label', c ? 'show sidebar' : 'hide sidebar');
+}
+sbBtn.addEventListener('click', () => {
+    const c = document.body.classList.toggle('sidebar-collapsed');
+    try { if (c) localStorage.setItem('sidebar-collapsed', '1'); else localStorage.removeItem('sidebar-collapsed'); } catch (e) {}
+    syncSidebar();
+});
+syncSidebar();

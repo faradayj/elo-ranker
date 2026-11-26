@@ -231,11 +231,14 @@ input.hero-title { width: 100%; min-width: 0; background: transparent; border: n
 input.hero-title:focus { border-bottom-color: var(--accent-primary); }
 #empty-lists { padding: 24px 48px; color: var(--text-secondary); }
 #view-items, #view-match, #view-results { padding: 24px 48px; }
-.items-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.items-bar { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.items-main { flex: 1 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .actions { display: flex; gap: 8px; }
 .thumb { width: 48px; height: 36px; object-fit: cover; display: block; }
 .add-row { display: flex; gap: 8px; }
 .add-row .input-wireframe { flex: 1; min-width: 0; }
+#match-status { padding: 0 48px; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary); display: flex; align-items: center; gap: 12px; }
+#match-status .btn-wireframe { padding: 4px 10px; font-size: 0.75rem; }
 #match { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; padding: 24px 48px; }
 [hidden] { display: none !important; }
 .side { border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; padding: 12px; }
@@ -256,6 +259,12 @@ input.hero-title:focus { border-bottom-color: var(--accent-primary); }
 .tier-label { width: 64px; height: 64px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; color: #000; }
 .tier-strip { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
 .tier-strip img { width: 120px; height: 68px; object-fit: cover; display: block; }
+.sidebar { transition: margin-left 0.25s ease, visibility 0s; }
+body.sidebar-collapsed .sidebar { margin-left: -380px; visibility: hidden; transition: margin-left 0.25s ease, visibility 0s linear 0.25s; }
+.sidebar-toggle-btn { position: fixed; top: 50%; left: 380px; transform: translateY(-50%); width: 20px; height: 56px; padding: 0; z-index: 10; background: #000; border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; transition: left 0.25s ease; }
+.sidebar-toggle-btn:hover { border-color: var(--border-hover); }
+body.sidebar-collapsed .sidebar-toggle-btn { left: 0; }
+@media (prefers-reduced-motion: reduce) { .sidebar, body.sidebar-collapsed .sidebar, .sidebar-toggle-btn { transition: none; } }
 .side-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 @media (max-width: 760px) {
     body { height: auto; overflow: visible; display: block; }
@@ -278,8 +287,11 @@ input.hero-title:focus { border-bottom-color: var(--accent-primary); }
     #view-items, #view-match, #view-results { padding: 16px; }
     .add-row { flex-direction: column; }
     .actions { flex-wrap: wrap; }
+    .sidebar-toggle-btn { display: none; }
+    body.sidebar-collapsed .sidebar { margin-left: 0; visibility: visible; }
     .data-table { min-width: 480px; }
     #match { grid-template-columns: 1fr; gap: 16px; padding: 16px 0; }
+    #match-status { padding: 0; }
     .pick-btn { min-height: 56px; font-size: 1.05rem; }
     .tier-label { width: 48px; height: 48px; font-size: 1.3rem; }
     .tier-strip img { width: 96px; height: 54px; }
@@ -287,7 +299,8 @@ input.hero-title:focus { border-bottom-color: var(--accent-primary); }
 </style>
 </head>
 <body>
-<aside class="sidebar">
+<script>try { if (localStorage.getItem('sidebar-collapsed') === '1') document.body.classList.add('sidebar-collapsed'); } catch (e) {}</script>
+<aside id="sidebar" class="sidebar">
     <div class="sidebar-head"><a href="../" class="hub-btn"><span class="hub-btn-text">Return to Hub</span></a></div>
     <div id="lists" class="sidebar-list"></div>
     <div class="sidebar-new"><button id="new-list-btn" class="btn-wireframe">+ NEW LIST</button></div>
@@ -296,12 +309,13 @@ input.hero-title:focus { border-bottom-color: var(--accent-primary); }
         <input id="import-file" type="file" accept="application/json" hidden>
     </div>
 </aside>
+<button id="sidebar-toggle" class="sidebar-toggle-btn" aria-label="hide sidebar" aria-expanded="true" aria-controls="sidebar">&lt;</button>
 <main class="main-content">
     <div class="hero-banner">
         <div class="hero-left">
             <h1 id="hero-title" class="hero-title">ELO RANKER</h1>
             <input id="list-name" class="hero-title" aria-label="list name" hidden>
-            <div id="save-error" class="form-error" hidden>COULD NOT SAVE — STORAGE FULL OR BLOCKED</div>
+            <div id="save-error" class="form-error" hidden>COULD NOT SAVE. STORAGE FULL OR BLOCKED</div>
         </div>
         <span id="progress" class="badge-pill">0 / 0</span>
     </div>
@@ -310,9 +324,10 @@ input.hero-title:focus { border-bottom-color: var(--accent-primary); }
         <button class="tab-btn active" data-tab="match">MATCH</button>
         <button class="tab-btn" data-tab="results">RESULTS</button>
     </div>
-    <p id="empty-lists" hidden>NO LISTS YET — CREATE ONE WITH + NEW LIST</p>
+    <p id="empty-lists" hidden>NO LISTS YET. CREATE ONE WITH + NEW LIST</p>
     <section id="view-items" hidden>
         <div class="items-bar">
+            <div class="items-main">
             <div class="add-row">
                 <input id="url-input" class="input-wireframe" placeholder="youtube link, playlist link or image link">
                 <input id="name-input" class="input-wireframe" placeholder="name (required for images)" aria-label="item name">
@@ -320,17 +335,19 @@ input.hero-title:focus { border-bottom-color: var(--accent-primary); }
             </div>
             <div id="url-error" class="form-error" hidden></div>
             <div id="add-status" hidden></div>
+            </div>
+            <div class="actions">
+                <button id="export-btn" class="btn-wireframe">EXPORT</button>
+                <button id="reset-btn" class="btn-wireframe">RESET VOTES</button>
+                <button id="delete-btn" class="btn-wireframe">DELETE LIST</button>
+            </div>
         </div>
         <div id="item-rows"></div>
-        <div class="actions">
-            <button id="export-btn" class="btn-wireframe">EXPORT</button>
-            <button id="reset-btn" class="btn-wireframe">RESET VOTES</button>
-            <button id="delete-btn" class="btn-wireframe">DELETE LIST</button>
-        </div>
     </section>
     <section id="view-match">
         <p id="empty-msg" hidden>ADD AT LEAST 2 ITEMS</p>
         <button id="start-btn" class="btn-wireframe">START</button>
+        <div id="match-status" hidden></div>
         <div id="match" hidden>
             <div class="side">
                 <div class="player-box"><div id="player-0"></div><img class="side-img" alt="" hidden><div class="player-cover"></div></div>
